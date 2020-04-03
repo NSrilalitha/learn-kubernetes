@@ -1,0 +1,37 @@
+
+Kubernetes/K8s
+
+It is a container management platform.
+
+Useful links to learn Kubernetes:
+Kubernetes documentation: https://kubernetes.io/docs/concepts/overview/what-is-kubernetes/
+https://www.youtube.com/watch?v=l_lWfipUimk -> explained very well
+
+use/install K8s
+---------------
+
+1. online kubernetes playground
+
+https://www.katacoda.com/courses/kubernetes/playground
+
+https://labs.play-with-k8s.com/
+
+https://training.play-with-kubernetes.com/
+
+2. installation tools
+
+ i) Minikube (quick and easy - if we want to try kubernetes in your local it is good choice)
+ 
+	https://kubernetes.io/docs/tasks/tools/install-minikube/
+	
+  ii) Kubeadm
+  
+	https://kubernetes.io/fr/docs/setup/independent/install-kubeadm/
+	
+3. cloud based kubernetes services
+
+  GKE - Google Kubernetes Engine
+  
+  AKS - Azure Kubernetes Service
+  
+  Amazon EKS
