@@ -35,3 +35,9 @@ https://training.play-with-kubernetes.com/
   AKS - Azure Kubernetes Service
   
   Amazon EKS
+  
+  
+  Commands reference doc:
+  -----------------------
+  https://kubernetes.io/docs/reference/generated/kubectl/kubectl-commands
+  
