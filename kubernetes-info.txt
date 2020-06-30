@@ -1,0 +1,216 @@
+
+
+YAML components:
+----------------
+1. metadata
+
+2. specifications
+	Inside specifications, there is 'template' which is another configuration-> this configuration is related to pod. (it containes metadata, spec)
+	template is blueprint of pod.
+
+3. status
+
+
+Connecting deployment to pods:
+------------------------------
+This is done by labels and selectors
+
+label is present in metadata
+selector is present inside specs
+inside template (for pod), label should be matched with label in metadata
+
+this will be connection between deployment and services as well. In service yaml file also label should be same for the component to match with its 
+deployment.
+
+Ports in service and pod
+--------------------
+
+For service, inside spec, ports tag will be there. Here port specifies service port. Target port specifies where the pod can be accessible.
+
+eg:
+ ports:
+ - protocol: TCP
+   port: 80 # service is avaialble at port 80
+   targetPort: 8080 # this indicates pod is available at port 8080 -> this target port should be matched with 'containerPort' specified in specs of deployment file under template section
+   
+   
+when we do kubectl get pods, we get pods information, but we don't get pod ip information. Inorder to know full information about pod run below command
+kubectl get pods -o wide
+
+this gives ip information about pod
+
+These ip address should be matched with endpoints in services information.
+
+
+Generally containers will be accessed with service ip. Since pods will be destroyed or recreated based on traffic. Inorder to know which service is
+providing access to which pods, run Kubectl describe service <service-name> 
+
+with this for that service we will be knowing which pods it is serving based on 'ENDPOINTS'
+
+Etcd
+-----
+etcd stores all the information about cluster.
+
+if we want any information about deployment/service/pod we do kubectl get
+
+if we want output in yaml format, we can run kubectl command like below
+
+for deployment -> kubectl get deployment ngnix-deployment -o yaml (here -o indicates output)
+
+the above displays the information in yaml format. to save the output in some file we can run below command
+
+kubectl get deployment ngnix-deployment -o yaml > ngnix-deployment-result.yaml
+
+so the result will be saved in given file "ngnix-deployment-result"
+
+
+ConfigMap: External configuration for your application
+----------
+lets say we are using spring boot application with mysql database. Inorder to containerize this application, we need two containers one for application
+and one for mysql. So generally mysql datasource details specified in application.properties file for the application. So this datasource should
+be updated with mysql container inorder to communicate our application with MySQL database.
+
+	Now lets say i created mysql container with different name. Then to access this with our application, we have to change the datasource property to
+	update with this new container name and build it and create docker image, and push it to docker hub.
+	
+	To overcome this problem, in kubernetes, we can specify database properties in configMap which is externalized from application.
+	
+	So configMap holds db properties say db_url, username, pwd etc. But if we keep these details in plain text format, it will be a security problem.
+	
+	so to provide security, there is another kubernetes object called "secret"
+	
+Secret:
+-------
+used to store secret data
+in base664 encoded format
+
+Volumes:
+--------
+to persist the data
+
+Deployment:
+----------
+Deployments should be created for stateless application. We do everything with deployment to access pods.
+Deployment is abstraction over pods. We create configuration file for Deployment, which contains configuration for pod as well. 
+
+kubectl create
+--------------
+when we run Kubectl create deploy name --image=image-name, this will create deployment with the specified name for mentioned image.
+That image will be running in some pod.
+eg: kubectl create deployment nginx-depl --image=nginx
+
+with kubectl create deployment command, kubernetes will automtically creates deployment configuration file with basic configuration. if we want replicas
+we can specify replica count as an option with create command.
+
+U can verify deployment, pod, services information with below commands
+kubectl get deployments
+kubectl get pods
+kubectl get services
+kubectl get replicaset
+
+To edit deployment we can use below command, which will display yaml file to edit
+kubectl edit deployment <deployment-name>
+
+kubectl apply
+-------------
+if we write our own configuration files (Say deployment files, service files) then, to execute those configuration files, we run kubectl apply command
+eg: kubectl apply -f nginx-depl-deployment.yaml
+
+to delete with configuration file
+--------------
+kubectl delete -f [file-name]
+
+
+Replicaset -> is managing replicas of pod
+
+Statefulset:
+-------------
+Statefulset should be created for stateful applications like databases eg: mongodb, mysql etc. So to create pods for db, we should use Statefulset
+StatefulSet takes care of scaling and replicating same as Deployment.
+
+Generally db will be hosted outside cluster in Kubernetes.
+
+
+To see logs, for debugging purpose we can use kubectl logs command
+eg: kubectl logs <pod-name>
+
+
+For database, to open its terminal, we can use kubectl exec command.
+Lets say i have pod for mongodb, deployment with mongo-depl. To open mongodb terminal i can use kubectl exec command as shown below
+
+kubectl exec -it mongo-depl-1223389u798 -- bin/bash
+
+here -it indicates interactive mode
+mongo-depl-1223389u798 is pod name
+this opens up mongodb terminal.
+
+with this command, we entered into the container and we can debug and execute some commands
+
+to exit from this terminal, we can use "exit" command. this will exit from mongodb terminal and goes back to kubernetes main terminal
+
+
+namespaces
+------------
+namespace is a virtual cluster inside a kubernetes clluster.
+If we dont create one, bydefault all the resources/components we create will reside under 'default' namespace.
+
+create namespace using below command
+kubectl create namespace my-namespace
+
+there is another way to create namespace using yaml configuration file
+
+retrieve namespaces using below command
+kubectl get namespaces
+
+the advantage of namespace is to grouping similar resources into one namespace which gives better overview.
+lets say u have spring boot application with mysql database. then database related resources can be categorized under db-namespace and other application
+resources can be categorized under app-namespace
+
+in app-namespace we can have our app container running in some pod. So we should define configMap in this app-namespace inorder to talk to database
+which is lying inside db-namespace.
+
+note: for each namespace there should be one configMap. Similarly secrets also should present in each namespace since we can't access secrets present
+      in one namespace in another namespace.
+	  
+Note: The only thing we can access from another namespace is 'service' through configMap. In configMap, wherever we mention db_url we have to specify
+      db service name.database
+	  
+	  eg: db_url: mysql-service.database
+	  
+	  here is an example of configMap file
+	  
+	  apiVersion: v1
+	  kind:	ConfigMap
+	  metadata:
+		name:	mysql-configMap
+	  data:
+		db_url:	mysql-service.database
+		
+Note: there are components which can't be created in namespace i.e., they live globally in kubernetes cluster, we can't isolate/restrict them to any
+      namespace. eg: volume
+	  
+	  to list resources which are not bound to any namespace using below command.
+	  kubectl api-resources --namespaced=false
+	  
+create component in namespace
+---------------------------
+using apply command we can specify namespace for component
+
+eg: kubectl apply -f mysql-configmap.yaml --name-space=db-namespace
+
+or in configuration file, under metadata section, after name add namespace tag. Refer below configMap file
+
+	  apiVersion: v1
+	  kind:	ConfigMap
+	  metadata:
+		name:	mysql-configMap
+		namespace:	db-namespace
+	  data:
+		db_url:	mysql-service.database
+		
+to verify component present in specific namespace use below command
+
+kubectl get configmap -n db-namespace
+
+then it will list down configmaps present in db-namespace. if we dont specify namespace with -n flag, then it will list down configmaps present in
+default namespace.

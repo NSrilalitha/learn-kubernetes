@@ -1,0 +1,244 @@
+
+db-namespace.yaml
+================
+apiVersion: v1
+kind: Namespace
+metadata:
+    name: db-namespace
+    labels:
+        name: db-namespace
+		
+
+mysql-persistent-volume.yaml
+===========================
+kind: PersistentVolume
+apiVersion: v1
+metadata:
+  name: mysql-persistent-volume
+  namespace: db-namespace
+  labels:
+    type: local
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/data"
+	
+	
+mysql-pv-claim.yaml
+====================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: mysql-pv-claim
+    namespace: db-namespace
+spec:
+    storageClassName: manual
+    accessModes:
+        - ReadWriteOnce
+    resources:
+        requests:
+            storage: 1Gi
+
+
+mysql-secret.yaml
+================
+apiVersion: v1
+kind: Secret
+metadata:
+    name: mysql-secret
+    namespace: db-namespace
+type: Opaque
+data:
+    mysql-root-username: cm9vdAo=
+    mysql-root-password: cm9vdAo=
+
+
+mysql-deployment.yaml
+=====================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-deployment
+  namespace: db-namespace
+  labels:
+    app: mysql
+    version: "1.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+      version: "1.0"
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: mysql
+        version: "1.0"
+    spec:
+      containers:
+      - image: mysql:8
+        name: mysql
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: root
+        - name: MYSQL_DATABASE
+          value: 'jdbc:mysql://mysql-service/taskManagement?allowPublicKeyRetrieval=true&useSSL=false'
+		- name: MYSQL_USER
+		  value: root
+		- name: MYSQL_PASSWORD
+		  value: root
+        ports:
+        - containerPort: 3306
+          name: mysql
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: mysql-pv-claim
+		  
+
+mysql-service.yaml
+==================
+kind: Service
+apiVersion: v1
+metadata:
+  name: mysql-service
+  namespace: db-namespace
+  labels:
+    app: mysql
+    version: "1.0"
+spec:
+  selector:
+    app: mysql
+    version: "1.0"
+  ports:
+    - port: 3306
+  selector:
+    app: mysql
+  clusterIP: None
+
+app-namespace.yaml
+===================
+apiVersion: v1
+kind: Namespace
+metadata:
+    name: app-namespace
+    labels:
+        name: app-namespace
+
+mysql-configmap.yaml
+=====================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: mysql-configmap
+	namespace: app-namespace
+data:
+    database_url: 'jdbc:mysql://mysql-service.db-namespace/taskManagement?allowPublicKeyRetrieval=true&useSSL=false'
+
+
+task-app-deployment.yaml
+========================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: task-app-deployment
+  namespace: app-namespace
+  labels:
+    app: task-app
+    version: "1.0"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: task-app
+      version: "1.0"
+  template:
+    metadata:
+      labels:
+        app: task-app
+        version: "1.0"
+    spec:
+      containers:
+      - name: task-app
+        image: nsrilalitha/task-management-app
+        env:
+        - name: spring.datasource.url
+          valueFrom: 
+            configMapKeyRef:   
+                name: mysql-configmap
+                key: database_url
+        ports:
+        - containerPort: 8080
+		
+		
+task-app-service.yaml
+=====================
+apiVersion: v1
+kind: Service
+metadata:
+  name: task-app-service
+  namespace: app-namespace
+  labels:
+    app: task-app
+    version: "1.0"
+spec:
+  selector:
+    app: task-app
+    version: "1.0"
+  type: LoadBalancer
+  externalIPs:
+  - 10.0.0.4
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      nodePort: 30000
+	  
+task-app-internal-service.yaml
+=====================
+apiVersion: v1
+kind: Service
+metadata:
+  name: task-app-internal-service
+  namespace: app-namespace
+  labels:
+    app: task-app
+    version: "1.0"
+spec:
+  selector:
+    app: task-app
+    version: "1.0"
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+	  
+
+task-app-ingress.yaml
+======================
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: task-app-ingress
+  namespace: app-namespace
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+  - host: task.management.com
+    http:
+      paths:
+      - backend:
+          serviceName: task-app-internal-service
+          servicePort: 8080
+    
+    

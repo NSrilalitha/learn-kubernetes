@@ -1,0 +1,184 @@
+
+
+for spring application
+-----------------------
+the application should be accessible over browser
+
+create Deployment.yaml for spring applciation
+
+
+for mysql db
+-------------
+create internal serevice
+
+Secret -> secret should be created with DB user and pwd
+ConfigMap -> with DB url
+
+we need external service to communicate with spring application.
+
+
+request in browser -> spring application external service -> spring application pod ->
+this communicates with mysql db internal service -> this will communicate with mysql pod (authenticate request with credentials avaiable in secret)
+
+
+========================
+1. Create deployment file for mysql db
+	touch mysql-deployment.yaml
+	
+2. edit yaml file and write configuration for mysql db
+	vi mysql-deployment.yaml
+	
+	here name: mysql-deployment
+		 app: mysql
+		 image: mysql:8
+		 replicas: 1
+		 ports: containerPort: 3306
+		 env:
+			-name: MYSQL_USER
+			 value: # values will be referenced from secrets
+			-name: MYSQL_PASSWORD
+			 value:
+			-name: MYSQL_ROOT_PASSWORD
+			 value:
+  
+  
+3. Create secret for DB username and password
+	To create secret we have to write Secret configuration file with kind- Secret
+	mysql-secret.yaml
+	
+	kind: Secret
+	name: mysql-secret
+	type: Opaque (for key value pair)
+	data: 
+		mysql-root-username: #Here values should be in base64 encoded format
+	    mysql-root-password:
+
+4. To create base64 encoded username and password, go to command prompt type below command
+   echo 'username' | base64 # this will output encoded username
+   echo 'password' | base64 # this will output encoded password. Copy these and paste it in mysql-secret.yaml file
+   
+5. Now generate secrets by running mysql-secret.yaml file. So run below command to create secret
+   kubectl apply -f mysql-secret.yaml
+   output: secret/mysql-secret created
+   
+   To view secrets run below command
+   kubectl get secret
+   
+   Now secret is created, so we have to give reference to this secret in deployment file
+
+6. Go to deployment file and give reference to mysql-secret for environment variables
+	
+7. Now deployment file is ready for mysql db. Lets apply with below command
+	kubectl apply -f mysql-deployment.yaml
+	output: deployment.apps/mysql-deployment created
+	
+	Now view pods, deployments, replicasets using below command
+	kubectl get all
+	
+	Now check pod status
+	kubectl describe pod <mysql-pod-name>
+	
+8. Now inorder to communicate with this mysql pod, we have to create mysql service.
+   so we can create mysql-service.yaml file or we can combine service configuration in deployment file by separating with '---'
+   
+   kind: Service
+   name: mysql-service
+   protocol: TCP
+   port:3306 # service port
+   targetPort: 3306 # containerPort of deployment file
+   
+   The label mentioned in deployment should match with selector in service, to link deployment with service file.
+   
+ Note: To put multiple yaml files in single file we can use '---' (3 dashes) to separate each document
+ 
+9. Now mysql service file is ready. Lets apply with below command
+	kubectl apply -f mysql-service.yaml
+	output: service/mysql-service created
+	
+	to retrieve service information, use below command
+	kubectl get service
+	
+	to describe/get more information we can use below command
+	kubectl describe service <service-name>
+	
+	 here Endpoints indicates pod ip address and targetPort
+	 
+	 To confirm whether the pod is running at same ipaddress run below command
+	 kubectl get pods -o wide
+	 
+	 To get all components (like deployments, services, replicasets) specific to mysql we can run command like below
+	 kubectl get all | grep mysql
+	 
+10. So with this, now we have mysql-secret.yaml (for storing mysql username and password),
+    mysql-deployment.yaml (to create pods and replica sets), mysql-service.yaml (to communicate with mysql pod).
+	
+	So mysql pod, deployment, service, replica sets are available now.
+	
+	Now lets create deployment, service for spring boot application. And to communicate with
+	mysql pod, we need configMap
+	
+11. Now create deployment file for spring boot application which is my task-managment-application
+     touch task-app-deployment.yaml
+	 
+	 vi task-app-deployment.yaml
+	 
+	  kind: deployment
+	  name: task-app-deployment
+	  image: nsrilalitha/task-management-app
+	  ports:
+	  - containerPort: 8080
+	  env:
+	  - name: MYSQL_PASSWORD
+	    valueFrom: # refer mysql-deployment file to apply secrets
+	  - name: MYSQL_ROOT_PASSWORD
+	    valueFrom: # refer mysql-deployment file to apply secrets
+	  - name: MYSQL_USER
+	    valueFrom: # refer mysql-deployment file to apply secrets
+	  - name: MYSQL_URL
+	    value: # for this we have create configMap, this we need to refer mysql-service
+
+	  
+12. Now create configMap to store database url with name mysql-configmap.yaml
+
+	kind: ConfigMap
+	name: mysql-configMap
+	data:
+		database_url: mysql-service
+	
+13. Now apply configmap file with below command
+	kubectl apply -f mysql-configmap.yaml
+	output: configmap/mysql-configmap created
+	
+	to view use below command
+	kubectl get configmap
+	
+14. Now refer this configmap in task-app-deployment file for database url.
+
+	
+15. Now deployment file is ready. apply with below command
+	kubectl apply -f task-app-deployment.yaml
+	output: deployment.apps/task-app-deployment created
+	
+16. now we all pods
+     kubectl get pods
+	 
+	 to see logs of task-app use below command
+	 kubectl logs <task-app-pod name>
+	 
+17. Now task-app pod is connected with mysql database through mysql-service via configmap
+
+18. Now to access application from browser, we need service for task-app
+    create task-app-service.yaml file
+	
+	to make it external service we should specify type as loadBalancer in config file
+	
+	what do u mean by external service? 
+	assigns service an external ip address and so it accepts external requests.
+	
+	and specify nodePort: 30000 (range -> 30000-32767)# port for external ip address
+	
+	
+	https://kubernetes.io/docs/tutorials/stateless-application/expose-external-ip-address/
+	
+	https://technology.amis.nl/2019/03/05/using-a-restful-web-service-spring-boot-application-in-minikube-together-with-an-external-dockerized-mysql-database/
+	
